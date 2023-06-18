@@ -13,9 +13,14 @@ public class Blog  { // entity 는 database와 소통
     private String title;
     private String username;
     private String contents;
-    private Integer password;
+    private String password;
 
     public Blog(BlogRequestDto requestDto) {
+        this.username = requestDto.getUsername();
+        this.contents = requestDto.getContents();
+    }
+
+    public void update(BlogRequestDto requestDto) {
         this.username = requestDto.getUsername();
         this.contents = requestDto.getContents();
     }

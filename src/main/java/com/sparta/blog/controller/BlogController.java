@@ -3,30 +3,53 @@ package com.sparta.blog.controller;
 import com.sparta.blog.dto.BlogRequestDto;
 import com.sparta.blog.dto.BlogResponseDto;
 import com.sparta.blog.entity.Blog;
-import lombok.Getter;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.RowMapper;
+import org.springframework.jdbc.support.GeneratedKeyHolder;
+import org.springframework.jdbc.support.KeyHolder;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.Collections;
-import java.util.HashMap;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.List;
-import java.util.Map;
 
 @RestController
 @RequestMapping("/api")
 public class BlogController {
 
-    private final Map<Long, Blog> blogList = new HashMap<>();
+    private final JdbcTemplate jdbcTemplate;
+
+    public BlogController(JdbcTemplate jdbcTemplate) {
+        this.jdbcTemplate = jdbcTemplate;
+    }
 
     @PostMapping("/blogs")
     public BlogResponseDto createBlog(@RequestBody BlogRequestDto requestDto) {
         // RequestDto -> Entity
         Blog blog = new Blog(requestDto);
 
+        // DB 저장
+        KeyHolder keyHolder = new GeneratedKeyHolder(); // 기본 키를 반환받기 위한 객체
 
-        Long maxID = blogList.size() > 0 ? Collections.max(blogList.keySet()) + 1 : 1;
-        blog.setId(maxID);
-        // DB저장
-        blogList.put(blog.getId(), blog);
+        String sql = "INSERT INTO blog (title, username, contents, password) VALUES (?, ?, ?, ?)";
+        jdbcTemplate.update( con -> {
+                    PreparedStatement preparedStatement = con.prepareStatement(sql,
+                            Statement.RETURN_GENERATED_KEYS);
+
+                    preparedStatement.setString(1, blog.getTitle());
+                    preparedStatement.setString(2, blog.getUsername());
+                    preparedStatement.setString(3, blog.getContents());
+                    preparedStatement.setString(4, blog.getPassword());
+
+                    return preparedStatement;
+                },
+                keyHolder);
+
+        // DB Insert 후 받아온 기본키 확인
+        Long id = keyHolder.getKey().longValue();
+        blog.setId(id);
 
         // Entity -> ResponseDto
         BlogResponseDto blogResponseDto = new BlogResponseDto(blog);
@@ -34,13 +57,69 @@ public class BlogController {
         return blogResponseDto;
     }
 
-    @GetMapping("/blogs") //조회 api
+    @GetMapping("/blogs")
     public List<BlogResponseDto> getBlogs() {
-        // Map To List
-        List<BlogResponseDto> responseList = blogList.values().stream().map(BlogResponseDto::new).toList();
+        // DB 조회
+        String sql = "SELECT * FROM blog";
 
-        return responseList;
+        return jdbcTemplate.query(sql, new RowMapper<BlogResponseDto>() {
+            @Override
+            public BlogResponseDto mapRow(ResultSet rs, int rowNum) throws SQLException {
+                // SQL 의 결과로 받아온 Memo 데이터들을 MemoResponseDto 타입으로 변환해줄 메서드
+                Long id = rs.getLong("id");
+                String title = rs.getString("title");
+                String username = rs.getString("username");
+                String contents = rs.getString("contents");
+                String password = rs.getString("password");
+                return new BlogResponseDto(id, title, username, contents, password);
+            }
+        });
     }
 
+    @PutMapping("/blogs/{id}")
+    public Long updateBlog(@PathVariable Long id, @RequestBody BlogRequestDto requestDto) {
+        // 해당 메모가 DB에 존재하는지 확인
+        Blog blog = findById(id);
+        if(blog != null) {
+            // memo 내용 수정
+            String sql = "UPDATE blog SET title = ?, username = ?, contents = ? WHERE id = ?";
+            jdbcTemplate.update(sql, requestDto.getTittle(), requestDto.getUsername(), requestDto.getContents(), id);
 
+            return id;
+        } else {
+            throw new IllegalArgumentException("선택한 메모는 존재하지 않습니다.");
+        }
+    }
+
+    @DeleteMapping("/blogs/{id}")
+    public Long deleteBlog(@PathVariable Long id) {
+        // 해당 메모가 DB에 존재하는지 확인
+        Blog blog = findById(id);
+        if(blog != null) {
+            // memo 삭제
+            String sql = "DELETE FROM blog WHERE id = ?";
+            jdbcTemplate.update(sql, id);
+
+            return id;
+        } else {
+            throw new IllegalArgumentException("선택한 메모는 존재하지 않습니다.");
+        }
+    }
+
+    private Blog findById(Long id) {
+        // DB 조회
+        String sql = "SELECT * FROM blog WHERE id = ?";
+
+        return jdbcTemplate.query(sql, resultSet -> {
+            if(resultSet.next()) {
+                Blog blog = new Blog();
+                blog.setTitle(resultSet.getString("title"));
+                blog.setUsername(resultSet.getString("username"));
+                blog.setContents(resultSet.getString("contents"));
+                return blog;
+            } else {
+                return null;
+            }
+        }, id);
+    }
 }

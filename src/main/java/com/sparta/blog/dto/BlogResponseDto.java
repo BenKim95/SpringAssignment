@@ -11,7 +11,7 @@ public class BlogResponseDto {
     private String title; // 제목
     private String username; // 작성자명
     private String contents; // 작성 내용
-    private Integer password; // 비밀번호
+    private String password; // 비밀번호
     private LocalDateTime createdAt; // 작성 될 때 시간
     private LocalDateTime modifiedAt; // 수정 될 때 시간
 
@@ -24,4 +24,11 @@ public class BlogResponseDto {
         this.password = blog.getPassword();
     }
 
+    public BlogResponseDto(Long id, String title, String username, String contents, String password) {
+        this.id = id;
+        this.title = title;
+        this.username = username;
+        this.contents = contents;
+        this.password = password;
+    }
 }
